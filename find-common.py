@@ -19,6 +19,8 @@ Output: ELGS Truncated filename:line#, issue
 
 FILENAME_LENGTH = 30
 PUNCTUATION_SET = set(string.punctuation)
+PUNCTUATION_SET.remove('_')
+
 MIN_SIMILAR_DEFAULT = 2
 
 
@@ -51,7 +53,7 @@ class WordInfo(object):
             self.line_numbers[filename] = [line_number]
         else:
             line_number_list = self.line_numbers[filename]
-            if len(line_number_list) > 0 and line_number_list[-1] != line_number:
+            if len(line_number_list) == 0 or line_number_list[-1] != line_number:
                 line_number_list.append(line_number)
 
     def _add_or_merge_issue(self, issue_key, issue):
@@ -130,16 +132,17 @@ def readCsvFile(csvFile):
     with open(csvFile) as f:
         reader = csv.reader(f)
         reader.__next__()  # Discard starting row
-        for priority, file, line_num, issue_type, issue, code_line in reader:
-            # if re.match("[^\w\"'\(\)\[\]\{\}]+$", word):  # Only Punctuation, no brackets/'"
-            for word in re.split("[^\w]", code_line):
+        for priority, file_, line_num, issue_type, issue, code_line in reader:
+            # if re.match("[^_\w\"'\(\)\[\]\{\}]+$", word):  # Only Punctuation, no brackets/'"
+            for word in re.split("[^\w_]", code_line):
                 word = remove_punctuation(word)
                 if len(word) < 2:
                     continue
+
                 issue = Issue(code_line, Translator.getIssueLetter(issue_type))
                 wordInfo = words[word] if word in words else WordInfo(word)
                 words[word] = wordInfo
-                wordInfo.add(file, line_num, issue)
+                wordInfo.add(file_, line_num, issue)
     return words
 
 
@@ -167,12 +170,13 @@ def main():
     csvFile = sys.argv[1]
     min_similar_issues = int(sys.argv[2] if len(sys.argv) == 3 else MIN_SIMILAR_DEFAULT)
     wordInfos = readCsvFile(csvFile)
-    for word in sorted(wordInfos):
+    for word in sorted(wordInfos, key=lambda s: s.lower()):
         print_(wordInfos[word], min_similar_issues)
+
 
 def usage():
     print("Usage:")
-    print("python", sys.argv[0], "pathToCsvFile/csvFile.csv", "[min similar issues to display]")
+    print("python", sys.argv[0], "pathToCsvFile/csvFile.csv", "[min_similar]")
 
 if __name__ == '__main__':
     main()
