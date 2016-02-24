@@ -28,8 +28,8 @@ class WordInfo(object):
     def __init__(self, word):
         self.word = word
         self.filenames = []
-        self.line_numbers = {}  # {filename: line_number_unsorted}
-        self.issue_map = {}  # filename + str(line_number)
+        self.line_numbers = {}  # {filename: [line_numbers_unsorted]}
+        self.issue_map = {}  # {filename+str(line_number): issue}
 
     def __len__(self):
         return len(self.issue_map)
@@ -58,13 +58,20 @@ class WordInfo(object):
 
     def _add_or_merge_issue(self, issue_key, issue):
         if issue_key in self.issue_map:
-            if self.issue_map[issue_key].get_issue_types() != issue.get_issue_types():
-                print(self.issue_map[issue_key].get_issue_types())
-                print(issue.get_issue_types())
-                exit()
-            twin = self.issue_map[issue_key]
-            for issue_type in issue.get_issue_types().replace(' ', ''):
-                twin.add_issue_type(issue_type)
+            current_issues = self.issue_map[issue_key].get_issue_set()
+            new_issues = issue.get_issue_set()
+            difference = new_issues.difference(current_issues)
+            if len(difference) > 0:
+                if len(difference) > 1:
+                    print("Hmm. More than one difference in this issue")
+                    print(difference)
+                    exit()
+                for issue_type in difference:
+                    self.issue_map[issue_key].add_issue_type(issue_type)
+            # else:
+            #     twin = self.issue_map[issue_key]
+            #     for issue_type in issue.get_issue_types().replace(' ', ''):
+            #         twin.add_issue_type(issue_type)
         else:
             self.issue_map[issue_key] = issue
 
@@ -100,6 +107,9 @@ class Issue(object):
         assert issue_type in ('E', 'L', 'G', 'S'), issue_type
         self._issue_types.add(issue_type)
 
+    def get_issue_set(self):
+        return self._issue_types
+
     def get_issue_types(self):
         ret = ''
         for issue_type in ('E', 'L', 'G', 'S'):
@@ -130,11 +140,12 @@ def remove_punctuation(word):
 def readCsvFile(csvFile):
     words = {}  # {word: WordInfo}
     with open(csvFile) as f:
+        # state = 0
         reader = csv.reader(f)
         reader.__next__()  # Discard starting row
         for priority, file_, line_num, issue_type, issue, code_line in reader:
             # if re.match("[^_\w\"'\(\)\[\]\{\}]+$", word):  # Only Punctuation, no brackets/'"
-            for word in re.split("[^\w_]", code_line):
+            for word in re.split(r"[^\w_]", code_line):
                 word = remove_punctuation(word)
                 if len(word) < 2:
                     continue
@@ -143,6 +154,11 @@ def readCsvFile(csvFile):
                 wordInfo = words[word] if word in words else WordInfo(word)
                 words[word] = wordInfo
                 wordInfo.add(file_, line_num, issue)
+            # state += 1
+            # if state % 500 == 0:
+            #     print("priority:", priority, "file_:", file_, "line_num:",
+            #           line_num, "issue_type:", issue_type, "issue:", issue,
+            #           "code_line:", code_line)
     return words
 
 
