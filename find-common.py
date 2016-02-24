@@ -1,21 +1,24 @@
+"""
+Print out code lines for all issues who's code lines contain a similar word.
+
+Order: By word, then file, then line number
+
+Output:
+'
+word:
+ELGS (Truncated)filename:line# issue code line
+'
+Flags ELGS indicate what issue types are relevant to the code line.
+E: Embedded Strings
+L: Locale Sensitive Methods
+G: General Patterns
+S: Static File References
+"""
+
 import csv
 import re
 import string
 import sys
-"""
-Print out all lines containing a similar word.
-Ignore duplicates.
-Order: By word, then file, then line number
-
-[("line number", hash)]  # To allow retrieval based on line number
-                        v should be ordered based on line number
-{hash: (word, [(issue, line_number)])}
-set("hashes of combined issue details")  # to avoid logging duplicates
-
-Create hashes by hashing combination of all filenames in a list.
-
-Output: ELGS Truncated filename:line#, issue
-"""
 
 FILENAME_LENGTH = 30
 PUNCTUATION_SET = set(string.punctuation)
@@ -26,23 +29,30 @@ DEFAULT_DESIRED_ISSUES = "ELGS"
 
 
 class WordInfo(object):
+    """ Store all data relevant to a single word.
+    Filenames containing word.
+    Line numbers relevant to each file name.
+    Issues relevant to each File and Line Number
+    """
     def __init__(self, word):
         self.word = word
         self.filenames = []
         self.line_numbers = {}  # {filename: [line_numbers_unsorted]}
-        self.issue_map = {}  # {filename+str(line_number): issue}
+        self.line_map = {}  # {filename+str(line_number): line}
 
     def __len__(self):
-        return len(self.issue_map)
+        return len(self.line_map)
 
-    def add(self, filename, line_number, issue):
+    def add(self, filename, line_number, line):
+        """ Add an issue that contains this word """
         line_number = int(line_number)
         self._add_filename(filename)
         self._add_line_number(filename, line_number)
-        issue_key = self._issue_key(filename, line_number)
-        self._add_or_merge_issue(issue_key, issue)
+        line_key = self._line_key(filename, line_number)
+        self._add_or_merge_line(line_key, line)
 
-    def _issue_key(self, filename, line_number):
+    @staticmethod
+    def _line_key(filename, line_number):
         return filename + str(line_number)
 
     def _add_filename(self, filename):
@@ -57,104 +67,99 @@ class WordInfo(object):
             if len(line_number_list) == 0 or line_number_list[-1] != line_number:
                 line_number_list.append(line_number)
 
-    def _add_or_merge_issue(self, issue_key, issue):
-        if issue_key in self.issue_map:
-            current_issues = self.issue_map[issue_key].get_issue_set()
-            new_issues = issue.get_issue_set()
-            difference = new_issues.difference(current_issues)
-            if len(difference) > 0:
-                if len(difference) > 1:
-                    print("Hmm. More than one difference in this issue")
-                    print(difference)
-                    exit()
-                for issue_type in difference:
-                    self.issue_map[issue_key].add_issue_type(issue_type)
-            # else:
-            #     twin = self.issue_map[issue_key]
-            #     for issue_type in issue.get_issue_types().replace(' ', ''):
-            #         twin.add_issue_type(issue_type)
-        else:
-            self.issue_map[issue_key] = issue
+    def _add_or_merge_line(self, line_key, line):
+        if line_key not in self.line_map:
+            self.line_map[line_key] = line
+            return
+        current_issues = self.line_map[line_key].get_issue_set()
+        new_issues = line.get_issue_set()
+        difference = new_issues.difference(current_issues)
+        if len(difference) > 0:
+            for issue_type in difference:
+                self.line_map[line_key].add_issue_type(issue_type)
+            if len(difference) > 1:
+                print("Hmm. More than one difference in this issue")
+                print(difference)
+                exit()
 
-    def getIterator(self):
-        return self._WordIterator(self.word, self.filenames, self.line_numbers, self.issue_map)
-
-    class _WordIterator(object):
-        def __init__(self, word, filenames, line_numbers, issue_map):
-            self.word = word
-            self.filenames = sorted(filenames)
-            self.line_numbers = line_numbers
-            self.issue_map = issue_map
-
-        def __iter__(self):
-            return self
-
-        def __next__(self):
-            for filename in self.filenames:
-                for line_num in self.line_numbers[filename]:
-                    issue = self.issue_map[filename + str(line_num)]
-                    issue_types = issue.get_issue_types()
-                    line_content = issue.line_content
-                    yield issue_types, filename, line_num, line_content
-            raise StopIteration
+    def line_info_in_sorted_order(self):
+        """ Generator yielding all info pertaining to each line.
+        Results ordered by filename, then by line number.
+        """
+        for filename in sorted(self.filenames):
+            for line_num in self.line_numbers[filename]:  # Already sorted
+                line = self.line_map[filename + str(line_num)]
+                issue_types = line.get_issue_types()
+                line_content = line.line_content
+                yield issue_types, filename, line_num, line_content
+        raise StopIteration
 
 
-class Issue(object):
+class Line(object):
+    """ Line content, and all issues associated with it """
     def __init__(self, line_content, issue_type):
         self.line_content = line_content
         self._issue_types = set(issue_type)
 
     def add_issue_type(self, issue_type):
+        """Note that this line has an issue of type issue_type,
+        must be E, L, G, or S
+        """
         assert issue_type in ('E', 'L', 'G', 'S'), issue_type
         self._issue_types.add(issue_type)
 
     def get_issue_set(self):
+        """Get set of single letter representations of issue types associated
+        with this line
+        """
         return self._issue_types
 
     def get_issue_types(self):
+        """Get 4 character string of issue types associated with this line.
+        Characters will be ' ' if that character's issue is not associated with
+        this line.
+
+        Example:
+            "EL S"
+        (No general patterns on the line)
+        """
         ret = ''
         for issue_type in ('E', 'L', 'G', 'S'):
             ret += issue_type if issue_type in self._issue_types else ' '
         return ret
 
 
-class csvWrapper(object):
-    def __init__(self, csvFile):
-        self.csvFile = csvFile
-
-    def getReader(self):
-        csvReader = csv.reader(self.csvFile)
-        csvReader.__next__()  # Discard starting row
-        return csvReader
-
-
-class Translator(object):
-    @staticmethod
-    def getIssueLetter(issue_type):
-        return issue_type[0]
+def get_issue_letter(full_issue_type_string):
+    """Takes an issue type string like "Embedded Strings" and returns the
+    associated issue letter (would be 'E')
+    """
+    return full_issue_type_string[0]
 
 
 def remove_punctuation(word):
+    """Remove punctuation symbols from word. Does not remove underscores"""
     return ''.join(ch for ch in word if ch not in PUNCTUATION_SET)
 
 
-def readCsvFile(csvFile):
+def read_csv_file(scan_detailed_csv_file):
+    """ Build a list of Words and their associated fields from a scan_detailed_csv file"""
     words = {}  # {word: WordInfo}
-    with open(csvFile) as f:
+    with open(scan_detailed_csv_file) as scan_detailed_csv_file:
         # state = 0
-        reader = csv.reader(f)
+        reader = csv.reader(scan_detailed_csv_file)
         reader.__next__()  # Discard starting row
-        for priority, file_, line_num, issue_type, issue, code_line in reader:
+        #   priority, file, line_num, issue_type, issue, code_line
+        for _, file_, line_num, issue_type, _, code_line in reader:
             # if re.match("[^_\w\"'\(\)\[\]\{\}]+$", word):  # Only Punctuation, no brackets/'"
             for word in re.split(r"[^\w_]", code_line):
                 word = remove_punctuation(word)
                 if len(word) < 2:
                     continue
 
-                issue = Issue(code_line, Translator.getIssueLetter(issue_type))
-                wordInfo = words[word] if word in words else WordInfo(word)
-                words[word] = wordInfo
-                wordInfo.add(file_, line_num, issue)
+                line = Line(code_line, get_issue_letter(issue_type))
+                word_info = words[word] if word in words else WordInfo(word)
+                words[word] = word_info
+                word_info.add(file_, line_num, line)
             # state += 1
             # if state % 500 == 0:
             #     print("priority:", priority, "file_:", file_, "line_num:",
@@ -163,44 +168,59 @@ def readCsvFile(csvFile):
     return words
 
 
-def setToLength(string, length):
-    string += ' ' * max(0, length - len(string))
-    return string[-length:]
+def set_to_length(string_, length):
+    """Force strength to be len length by either truncating it from the front,
+    or appending spaces to it.
+    """
+    string_ += ' ' * max(0, length - len(string_))
+    return string_[-length:]
 
 
-def print_(wordInfo, min_similar_issues, desired_issue_types):
+def print_info_for_word(word_info, min_similar_issues, desired_issue_types):
+    """For each line containing this word (in the relevant WordInfo) print the
+    following:
+    issue_types filename(set_to_length FILENAME_LENGTH):line# code_line
+    E.g.
+    EL S truncatedPath/someFile:229 example.append("An Example, path/file.html")
+    """
     def desired_issue_found(issue_types, desired_issue_types):
+        """Determine if any of the desired issue types are part of the actual
+        issue types
+        """
         for issue in desired_issue_types:
             if issue in issue_types:
                 return True
         return False
 
-    if len(wordInfo) < min_similar_issues:
+    if len(word_info) < min_similar_issues:
         return
-    it = wordInfo.getIterator()
-    it = it.__next__()
     print()
-    print(wordInfo.word + ":")
-    for issue_types, filename, line_num, line_content in it:
+    print(word_info.word + ":")
+    for (issue_types, filename, line_num, line_content) in \
+            word_info.line_info_in_sorted_order():
         if not desired_issue_found(issue_types, desired_issue_types):
             continue
-        filename = setToLength(filename, FILENAME_LENGTH)
+        filename = set_to_length(filename, FILENAME_LENGTH)
         print(issue_types, filename+":"+str(line_num), line_content)
 
 
 def main():
-    if 2 > len(sys.argv) or len(sys.argv) > 3:
+    """Print usage message if wrong number of args.
+    Otherwise, run program and send output to stdout
+    """
+    if not 3 <= len(sys.argv) <= 4:
         usage()
         exit()
-    csvFile = sys.argv[1]
-    min_similar_issues = int(sys.argv[2] if len(sys.argv) == 3 else MIN_SIMILAR_DEFAULT)
-    desired_issue_types = int(sys.argv[3] if len(sys.argv) == 4 else DEFAULT_DESIRED_ISSUES)
-    wordInfos = readCsvFile(csvFile)
-    for word in sorted(wordInfos, key=lambda s: s.lower()):
-        print_(wordInfos[word], min_similar_issues, desired_issue_types)
+    csv_file = sys.argv[1]
+    min_similar_lines = int(sys.argv[2] if len(sys.argv) == 3 else MIN_SIMILAR_DEFAULT)
+    desired_issue_types = sys.argv[3] if len(sys.argv) == 4 else DEFAULT_DESIRED_ISSUES
+    word_infos = read_csv_file(csv_file)
+    for word in sorted(word_infos, key=lambda s: s.lower()):
+        print_info_for_word(word_infos[word], min_similar_lines, desired_issue_types)
 
 
 def usage():
+    """Print a usage message"""
     print("Usage:")
     print("python", sys.argv[0], "pathToCsvFile/csvFile.csv", "[min_similar]",
           "[desired_issue_types]")
