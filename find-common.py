@@ -22,6 +22,7 @@ PUNCTUATION_SET = set(string.punctuation)
 PUNCTUATION_SET.remove('_')
 
 MIN_SIMILAR_DEFAULT = 2
+DEFAULT_DESIRED_ISSUES = "ELGS"
 
 
 class WordInfo(object):
@@ -167,7 +168,13 @@ def setToLength(string, length):
     return string[-length:]
 
 
-def print_(wordInfo, min_similar_issues):
+def print_(wordInfo, min_similar_issues, desired_issue_types):
+    def desired_issue_found(issue_types, desired_issue_types):
+        for issue in desired_issue_types:
+            if issue in issue_types:
+                return True
+        return False
+
     if len(wordInfo) < min_similar_issues:
         return
     it = wordInfo.getIterator()
@@ -175,6 +182,8 @@ def print_(wordInfo, min_similar_issues):
     print()
     print(wordInfo.word + ":")
     for issue_types, filename, line_num, line_content in it:
+        if not desired_issue_found(issue_types, desired_issue_types):
+            continue
         filename = setToLength(filename, FILENAME_LENGTH)
         print(issue_types, filename+":"+str(line_num), line_content)
 
@@ -185,14 +194,16 @@ def main():
         exit()
     csvFile = sys.argv[1]
     min_similar_issues = int(sys.argv[2] if len(sys.argv) == 3 else MIN_SIMILAR_DEFAULT)
+    desired_issue_types = int(sys.argv[3] if len(sys.argv) == 4 else DEFAULT_DESIRED_ISSUES)
     wordInfos = readCsvFile(csvFile)
     for word in sorted(wordInfos, key=lambda s: s.lower()):
-        print_(wordInfos[word], min_similar_issues)
+        print_(wordInfos[word], min_similar_issues, desired_issue_types)
 
 
 def usage():
     print("Usage:")
-    print("python", sys.argv[0], "pathToCsvFile/csvFile.csv", "[min_similar]")
+    print("python", sys.argv[0], "pathToCsvFile/csvFile.csv", "[min_similar]",
+          "[desired_issue_types]")
 
 if __name__ == '__main__':
     main()
