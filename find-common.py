@@ -14,11 +14,13 @@ L: Locale Sensitive Methods
 G: General Patterns
 S: Static File References
 """
+from __future__ import print_function
 
 import csv
 import re
 import string
 import sys
+
 
 FILENAME_LENGTH = 30
 PUNCTUATION_SET = set(string.punctuation)
@@ -147,7 +149,10 @@ def read_csv_file(scan_detailed_csv_file):
     with open(scan_detailed_csv_file) as scan_detailed_csv_file:
         # state = 0
         reader = csv.reader(scan_detailed_csv_file)
-        reader.__next__()  # Discard starting row
+        try:
+            reader.__next__()
+        except AttributeError:
+            reader.next()  # Discard starting row
         #   priority, file, line_num, issue_type, issue, code_line
         for _, file_, line_num, issue_type, _, code_line in reader:
             # if re.match("[^_\w\"'\(\)\[\]\{\}]+$", word):  # Only Punctuation, no brackets/'"
