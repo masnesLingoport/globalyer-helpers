@@ -29,6 +29,8 @@ PUNCTUATION_SET.remove('_')
 MIN_SIMILAR_DEFAULT = 2
 DEFAULT_DESIRED_ISSUES = "ELGS"
 
+IGNORED_WORDS = set("the", "if", "for", "self", "this")
+
 
 class WordInfo(object):
     """ Store all data relevant to a single word.
@@ -158,7 +160,7 @@ def read_csv_file(scan_detailed_csv_file):
             # if re.match("[^_\w\"'\(\)\[\]\{\}]+$", word):  # Only Punctuation, no brackets/'"
             for word in re.split(r"[^\w_]", code_line):
                 word = remove_punctuation(word)
-                if len(word) < 2:
+                if len(word) < 2 or word in IGNORED_WORDS:
                     continue
 
                 line = Line(code_line, get_issue_letter(issue_type))
