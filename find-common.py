@@ -221,6 +221,12 @@ def main():
     min_similar_lines = int(sys.argv[2] if len(sys.argv) >= 3 else MIN_SIMILAR_DEFAULT)
     desired_issue_types = sys.argv[3] if len(sys.argv) >= 4 else DEFAULT_DESIRED_ISSUES
     word_infos = read_csv_file(csv_file)
+    print("Words ")
+    for word in sorted(word_infos, key=lambda s: s.lower()):
+        word_info = word_infos[word]
+        if len(word_info) > min_similar_lines:
+            print(word)
+    print()
     for word in sorted(word_infos, key=lambda s: s.lower()):
         print_info_for_word(word_infos[word], min_similar_lines, desired_issue_types)
 
