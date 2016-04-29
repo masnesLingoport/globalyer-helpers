@@ -171,11 +171,6 @@ def read_csv_file(scan_detailed_csv_file):
                 word_info = words[word] if word in words else WordInfo(word)
                 words[word] = word_info
                 word_info.add(file_, line_num, line)
-            # state += 1
-            # if state % 500 == 0:
-            #     print("priority:", priority, "file_:", file_, "line_num:",
-            #           line_num, "issue_type:", issue_type, "issue:", issue,
-            #           "code_line:", code_line)
     return words
 
 
