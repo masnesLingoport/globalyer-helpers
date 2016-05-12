@@ -31,7 +31,7 @@ DEFAULT_DESIRED_ISSUES = "ELGS"
 
 IGNORED_WORDS = set(
     ["add", "and", "the", "if", "else", "in", "for", "self", "this", "true", "false", "function",
-     "is", "not", "null", "of",
+     "is", "not", "null", "of", "but",
      ]
 )
 
