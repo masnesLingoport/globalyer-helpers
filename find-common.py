@@ -234,8 +234,15 @@ def main():
 def usage():
     """Print a usage message"""
     print("Usage:")
-    print("python", sys.argv[0], "pathToCsvFile/csvFile.csv", "[min_similar]",
-          "[desired_issue_types]")
+    print("python", sys.argv[0], "pathToCsvFile/csvFile.csv", "min_similar",
+          "desired_issue_types")
+    print()
+    print("Example:")
+    print("Detect words associated with 10 or more issues.")
+    print("Find these issue types: Embedded Strings, Locale Sensitive Methods")
+    print()
+    print("\tpython find-common.py javascript_report.csv 10 ELG")
+    print()
 
 if __name__ == '__main__':
     main()
