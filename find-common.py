@@ -17,6 +17,7 @@ S: Static File References
 from __future__ import print_function
 
 import csv
+import os
 import re
 import string
 import sys
@@ -244,5 +245,13 @@ def usage():
     print("\tpython find-common.py javascript_report.csv 10 ELG")
     print()
 
+
 if __name__ == '__main__':
+    try:
+        with open(os.path.dirname(os.path.realpath(__file__)) + "/ignoredwords.txt") as f:
+            additional_ignores = set([word.strip() for line in f for word in line.strip().split()])
+            IGNORED_WORDS = IGNORED_WORDS.union(additional_ignores)
+    except FileNotFoundError:
+        print("not found: ")
+        pass
     main()
