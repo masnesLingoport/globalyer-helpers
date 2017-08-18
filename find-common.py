@@ -22,6 +22,7 @@ import re
 import string
 import sys
 
+import xml.etree.ElementTree as ET
 
 FILENAME_LENGTH = 30
 PUNCTUATION_SET = set(string.punctuation)
@@ -265,10 +266,16 @@ def main():
     if not 3 <= len(sys.argv) <= 4:
         usage()
         exit()
-    csv_file = sys.argv[1]
+    infile = sys.argv[1]
     min_similar_lines = int(sys.argv[2] if len(sys.argv) >= 3 else MIN_SIMILAR_DEFAULT)
     desired_issue_types = sys.argv[3] if len(sys.argv) >= 4 else DEFAULT_DESIRED_ISSUES
-    word_infos = read_csv_file(csv_file)
+    if '.csv' in infile:
+        word_infos = read_csv_file(infile, desired_issue_types)
+    elif '.xml' in infile:
+        word_infos = read_xml_file(infile, desired_issue_types)
+    else:
+        print("Error. expected csv or xml extension")
+        return 1
     print("Words ")
     for word in sorted(word_infos, key=lambda s: s.lower()):
         word_info = word_infos[word]
@@ -282,7 +289,7 @@ def main():
 def usage():
     """Print a usage message"""
     print("Usage:")
-    print("python", sys.argv[0], "pathToCsvFile/csvFile.csv", "min_similar",
+    print("python", sys.argv[0], "pathToCsvOrXMLFile/file.csv|xml", "min_similar",
           "desired_issue_types")
     print()
     print("Example:")
