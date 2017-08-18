@@ -152,28 +152,73 @@ def remove_punctuation(word):
     return ''.join(ch for ch in word if ch not in PUNCTUATION_SET)
 
 
-def read_csv_file(scan_detailed_csv_file):
+def get_next(generator):
+    """Get next item in generator manually. Python2 and 3 compatible."""
+    try:
+        return generator.__next__()
+    except AttributeError:
+        return generator.next()
+
+
+def read_xml_file(scan_detailed_xml_file, desired_issue_types):
+    words = {}
+    with open(scan_detailed_xml_file) as scan_detailed_xml_file:
+        tree = ET.parse(scan_detailed_xml_file)
+        root = tree.getroot()
+        for child in root:
+            for scan_results in child.findall('ScanResults'):
+                issue_type = scan_results.attrib['type']
+                for result in scan_results:
+                    # Priority File Line_# Issue_Type Issue Code_Line
+                    priority = result.attrib['priority']
+                    priority = '5' if not priority else priority
+                    file_ = result.attrib['file']
+                    line_num = result.attrib['linenum']
+                    issue = result.find('issue').text
+                    code_line = result.find('line').text
+                    if get_issue_letter(issue_type) not in desired_issue_types:
+                        continue
+                    for word in re.split(r"[^\w_]", code_line):
+                        word = remove_punctuation(word)
+                        if len(word) < 2 or word in IGNORED_WORDS or re.match(r"\d+$", word):
+                            continue
+                        line = Line(code_line, get_issue_letter(issue_type), issue)
+                        word_info = words[word] if word in words else WordInfo(word)
+                        words[word] = word_info
+                        word_info.add(file_, line_num, line, issue)
+    return words
+
+
+def read_csv_file(scan_detailed_csv_file, desired_issue_types):
     """ Build a list of Words and their associated fields from a scan_detailed_csv file"""
     words = {}  # {word: WordInfo}
     with open(scan_detailed_csv_file) as scan_detailed_csv_file:
         # state = 0
         reader = csv.reader(scan_detailed_csv_file)
+        get_next(reader)  # Discard starting row
         try:
-            reader.__next__()
-        except AttributeError:
-            reader.next()  # Discard starting row
-        #   priority, file, line_num, issue_type, issue, code_line
-        for _, file_, line_num, issue_type, _, code_line in reader:
-            # if re.match("[^_\w\"'\(\)\[\]\{\}]+$", word):  # Only Punctuation, no brackets/'"
-            for word in re.split(r"[^\w_]", code_line):
-                word = remove_punctuation(word)
-                if len(word) < 2 or word in IGNORED_WORDS or re.match(r"\d+$", word):
+            while True:
+                # priority, file, line_num, issue_type, issue, code_line
+                try:
+                    _, file_, line_num, issue_type, issue, code_line = get_next(reader)
+                except UnicodeDecodeError as ue:
+                    print(ue, file=sys.stderr)
                     continue
+                # Only Punctuation, no brackets or quotes
+                # if re.match("[^_\w\"'\(\)\[\]\{\}]+$", word):
+                if get_issue_letter(issue_type) not in desired_issue_types:
+                    continue
+                for word in re.split(r"[^\w_]", code_line):
+                    word = remove_punctuation(word)
+                    if len(word) < 2 or word in IGNORED_WORDS or re.match(r"\d+$", word):
+                        continue
 
-                line = Line(code_line, get_issue_letter(issue_type))
-                word_info = words[word] if word in words else WordInfo(word)
-                words[word] = word_info
-                word_info.add(file_, line_num, line)
+                    line = Line(code_line, get_issue_letter(issue_type), issue)
+                    word_info = words[word] if word in words else WordInfo(word)
+                    words[word] = word_info
+                    word_info.add(file_, line_num, line, issue)
+        except StopIteration:
+            pass
     return words
 
 
