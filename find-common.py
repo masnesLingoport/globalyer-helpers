@@ -52,13 +52,13 @@ class WordInfo(object):
     def __len__(self):
         return len(self.line_map)
 
-    def add(self, filename, line_number, line):
+    def add(self, filename, line_number, line, issue):
         """ Add an issue that contains this word """
         line_number = int(line_number)
         self._add_filename(filename)
         self._add_line_number(filename, line_number)
         line_key = self._line_key(filename, line_number)
-        self._add_or_merge_line(line_key, line)
+        self._add_or_merge_line(line_key, line, issue)
 
     @staticmethod
     def _line_key(filename, line_number):
@@ -76,20 +76,14 @@ class WordInfo(object):
             if len(line_number_list) == 0 or line_number_list[-1] != line_number:
                 line_number_list.append(line_number)
 
-    def _add_or_merge_line(self, line_key, line):
+    def _add_or_merge_line(self, line_key, line, issue):
         if line_key not in self.line_map:
             self.line_map[line_key] = line
             return
-        current_issues = self.line_map[line_key].get_issue_set()
-        new_issues = line.get_issue_set()
-        difference = new_issues.difference(current_issues)
-        if len(difference) > 0:
-            for issue_type in difference:
-                self.line_map[line_key].add_issue_type(issue_type)
-            if len(difference) > 1:
-                print("Hmm. More than one difference in this issue")
-                print(difference)
-                exit()
+        for issue_type in line.get_issue_types_set():
+            self.line_map[line_key].add_issue_type(issue_type)
+        for issue in line.get_issue_set():
+            self.line_map[line_key].add_issue(issue)
 
     def line_info_in_sorted_order(self):
         """ Generator yielding all info pertaining to each line.
@@ -100,15 +94,17 @@ class WordInfo(object):
                 line = self.line_map[filename + str(line_num)]
                 issue_types = line.get_issue_types()
                 line_content = line.line_content
-                yield issue_types, filename, line_num, line_content
+                line_issues = line.get_issue_set()
+                yield issue_types, filename, line_num, line_content, sorted(line_issues)
         raise StopIteration
 
 
 class Line(object):
     """ Line content, and all issues associated with it """
-    def __init__(self, line_content, issue_type):
+    def __init__(self, line_content, issue_type, issue):
         self.line_content = line_content
         self._issue_types = set(issue_type)
+        self._issues = set([issue])
 
     def add_issue_type(self, issue_type):
         """Note that this line has an issue of type issue_type,
@@ -117,7 +113,13 @@ class Line(object):
         assert issue_type in ('E', 'L', 'G', 'S'), issue_type
         self._issue_types.add(issue_type)
 
+    def add_issue(self, issue):
+        self._issues.add(issue)
+
     def get_issue_set(self):
+        return self._issues
+
+    def get_issue_types_set(self):
         """Get set of single letter representations of issue types associated
         with this line
         """
@@ -203,12 +205,12 @@ def print_info_for_word(word_info, min_similar_issues, desired_issue_types):
         return
     print()
     print(word_info.word + ":")
-    for (issue_types, filename, line_num, line_content) in \
+    for (issue_types, filename, line_num, line_content, line_issues) in \
             word_info.line_info_in_sorted_order():
         if not desired_issue_found(issue_types, desired_issue_types):
             continue
         filename = set_to_length(filename, FILENAME_LENGTH)
-        print(issue_types, filename+":"+str(line_num), line_content)
+        print(issue_types, filename+":"+str(line_num), line_content, " | " + str(line_issues))
 
 
 def main():
