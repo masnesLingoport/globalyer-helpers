@@ -3,7 +3,6 @@ import csv
 import datetime
 import sys
 import copy
-import re
 
 """
 Browser tracking:
@@ -169,6 +168,7 @@ def manictime_to_timestamp(time):
     dt = datetime.datetime.strptime(time, "%m/%d/%Y %I:%M:%S %p")
     return dt.timestamp()
 
+
 def transform_file(somefile):
     manictime = False
     timeyourweb = False
@@ -216,7 +216,6 @@ def transform_file(somefile):
 
     time_entries_consolidated = consolidate_time_entries(time_entries[1:])
     time_entries_consolidated_and_gap_filled = gap_fill_time_entries(time_entries_consolidated)
-
 
     with open(outfile, "w") as toggle_outfile:
         writer = csv.writer(toggle_outfile)
