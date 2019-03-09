@@ -36,17 +36,26 @@ class TimeEntry(object):
     def __init__(self, domain, path, title, t_start, t_end):
         self.user = "Masnes"
         self.email = "masnes@lingoport.com"
-        self.start = datetime.datetime.fromtimestamp(t_start)
-        self.end = datetime.datetime.fromtimestamp(t_end)
         self.t_start = t_start
         self.t_end = t_end
         self.domain = domain
-        self.duration = self.end - self.start
         self.client = None  # Client = type of work
         self.project = None  # Project = subcategory
         self.task = None  # Task = sub sub category
         self.description = "||".join([title, domain, path])
         self.subparts = []
+
+    @property
+    def duration(self):
+        return self.end - self.start
+
+    @property
+    def start(self):
+        return datetime.datetime.fromtimestamp(self.t_start)
+
+    @property
+    def end(self):
+        return datetime.datetime.fromtimestamp(self.t_end)
 
     def __repr__(self):
         return "TimeEntry(user = {}, email = {}, start = {}, end = {}, t_start = {}, t_end = {}, " \
@@ -66,8 +75,7 @@ class TimeEntry(object):
         elif len(self.subparts) == 0:  # Make sure we have a sub-entry for first part
             self.merge(self)
         self.subparts.append(time_entry)
-        self.end = time_entry.end
-        self.duration = self.end - self.start
+        self.t_end = time_entry.t_end
         self.description = "combined time entry"
 
     def get_longest(self, te_lambda):
@@ -91,7 +99,9 @@ class TimeEntry(object):
 
 
 def consolidate_time_entries(time_entries):
-    """merge time entries that are separated by less than 20 minutes. Show longest one."""
+    """merge time entries that are separated by less than max_idle minutes into
+    blocks at least min_individual_block in size. Drop entries that are too
+    small. For each entry, set descriptive variables to longest common one."""
     max_idle = datetime.timedelta(minutes=15)
     min_individual_block = datetime.timedelta(minutes=8)
 
@@ -120,6 +130,30 @@ def consolidate_time_entries(time_entries):
     if not merged:
         raise AttributeError(str(len(time_entries)) + " -> 0" + "{}".format(time_group))
     return [time_group for time_group in merged if time_group.duration > min_individual_block]
+
+
+def gap_fill_time_entries(time_entries):
+    """Add time entries for blank spaces that reside in the middle of a sorted
+    time entry iterable where the blank spaces fit within a minimum and maximum
+    allowed time."""
+    max_gap = datetime.timedelta(hours=4)
+    min_entry_size = datetime.timedelta(minutes=8)
+    gap_filled_time_entries = []
+    prev_entry = None
+    for entry in time_entries:
+        if prev_entry:
+            entry_delta = entry.start - prev_entry.end
+            if max_gap >= entry_delta and entry_delta >= min_entry_size:
+                gap_entry = TimeEntry("Not Logged", "Unknown Path", "Unknown Focus",
+                                      prev_entry.t_end + 1, entry.t_start - 1)
+                print("adding gap entry")
+                gap_filled_time_entries.append(gap_entry)
+            elif entry_delta < min_entry_size:
+                print("growing previous")
+                prev_entry.t_end = entry.t_start - 1
+        gap_filled_time_entries.append(entry)
+        prev_entry = entry
+    return gap_filled_time_entries
 
 
 def get_next(generator):
@@ -181,12 +215,15 @@ def transform_file(somefile):
             pass
 
     time_entries_consolidated = consolidate_time_entries(time_entries[1:])
+    time_entries_consolidated_and_gap_filled = gap_fill_time_entries(time_entries_consolidated)
+
+
     with open(outfile, "w") as toggle_outfile:
         writer = csv.writer(toggle_outfile)
         # [user, email, description, client, project, task, d_start, d_end, t_start, t_end, duration]
         writer.writerow(["User", "Email", "Description", "Client", "Project", "Task",
                          "Start date", "End date", "Start time", "End time", "Duration"])
-        for entry in time_entries_consolidated:
+        for entry in time_entries_consolidated_and_gap_filled:
             writer.writerow(entry.to_csv_input())
 
 
