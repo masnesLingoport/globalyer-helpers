@@ -45,16 +45,16 @@ class TimeEntry(object):
         self.subparts = []
 
     @property
-    def duration(self):
-        return self.end - self.start
-
-    @property
     def start(self):
         return datetime.datetime.fromtimestamp(self.t_start)
 
     @property
     def end(self):
         return datetime.datetime.fromtimestamp(self.t_end)
+
+    @property
+    def duration(self):
+        return self.end - self.start
 
     def __repr__(self):
         return "TimeEntry(user = {}, email = {}, start = {}, end = {}, t_start = {}, t_end = {}, " \
@@ -146,10 +146,8 @@ def gap_fill_time_entries(time_entries):
             if max_gap >= entry_delta and entry_delta >= min_entry_size:
                 gap_entry = TimeEntry("Not Logged", "Unknown Path", "Unknown Focus",
                                       prev_entry.t_end + 1, entry.t_start - 1)
-                print("adding gap entry")
                 gap_filled_time_entries.append(gap_entry)
             elif entry_delta < min_entry_size:
-                print("growing previous")
                 prev_entry.t_end = entry.t_start - 1
         gap_filled_time_entries.append(entry)
         prev_entry = entry
