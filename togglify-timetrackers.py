@@ -125,7 +125,8 @@ def consolidate_time_entries(time_entries):
         else:
             merged.append(time_group)
             time_group = time_entry
-    merged.append(time_group)
+    if time_group is not None:
+        merged.append(time_group)
     if not merged:
         raise AttributeError(str(len(time_entries)) + " -> 0" + "{}".format(time_group))
     return [time_group for time_group in merged if time_group.duration > min_individual_block]
